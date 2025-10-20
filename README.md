@@ -85,10 +85,11 @@ Parameter	Value
 | Learning rate          | 3e-4         |
 | Discount factor (γ)    | 0.99         |
 | Target update rate (τ) | 0.005        |
-| Replay buffer size     | 100,000      |
+| Replay buffer size     | 1,000,000    |
 | Warmup steps           | 10,000       |
 | Evaluation interval    | 10,000 steps |
-
+| Steps                  | 2,000,000    |
+| Update every x steps   | 10           |
 
 📚 Reference
 
