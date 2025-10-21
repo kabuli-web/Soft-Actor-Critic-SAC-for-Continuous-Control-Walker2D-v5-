@@ -88,6 +88,11 @@ Parameter	Value
 | Steps                  | 2,000,000    |
 | Update every x steps   | 10           |
 
+Results
+<img width="916" height="421" alt="image" src="https://github.com/user-attachments/assets/5773fd7b-7531-40bc-8a12-608084c529cf" />
+
+
+
 📚 Reference
 
 Haarnoja, T., Zhou, A., Abbeel, P., & Levine, S. (2018).
