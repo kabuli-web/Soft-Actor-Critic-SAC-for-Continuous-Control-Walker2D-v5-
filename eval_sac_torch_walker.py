@@ -5,14 +5,14 @@ import numpy as np
 import torch
 import gymnasium as gym
 
-from sac_torch import SAC  # uses the same Actor architecture as training
+from sac_torch import SAC  
 
 def find_latest_checkpoint(save_dir: str):
     if not os.path.isdir(save_dir):
         return None
     subdirs = [d for d in os.listdir(save_dir) if os.path.isdir(os.path.join(save_dir, d))]
     if not subdirs:
-        # fall back to actor_final.pt in root if present
+        
         final_path = os.path.join(save_dir, "actor_final.pt")
         return final_path if os.path.exists(final_path) else None
     # sort by numeric content (e.g., "step_200k" -> 200)
@@ -20,6 +20,7 @@ def find_latest_checkpoint(save_dir: str):
         digits = "".join(c for c in name if c.isdigit())
         return int(digits) if digits else -1
     latest = sorted(subdirs, key=numeric_key)[-1]
+    latest = "step_2000k"
     return os.path.join(save_dir, latest, "actor.pt")
 
 def make_env(env_id: str, render: str, video_dir: str | None):
@@ -45,7 +46,7 @@ def evaluate(env_id="Walker2d-v5",
 
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Build env (fallback to v4 if v5 missing)
+   
     try:
         env = make_env(env_id, render, video_dir)
     except Exception:
@@ -61,16 +62,16 @@ def evaluate(env_id="Walker2d-v5",
     except Exception:
         pass
 
-    # Dimensions / bounds
+    
     state_dim  = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
     act_low    = env.action_space.low
     act_high   = env.action_space.high
 
-    # Build agent skeleton (actor only)
+   
     sac = SAC(state_dim, action_dim, act_low, act_high, device=device)
 
-    # Resolve which weights to load
+    
     chosen_path = actor_path or find_latest_checkpoint(save_dir)
     if chosen_path is None:
         raise FileNotFoundError(
@@ -78,14 +79,14 @@ def evaluate(env_id="Walker2d-v5",
             f"Pass --actor_path to a specific .pt file."
         )
 
-    # Load weights
+    
     state = torch.load(chosen_path, map_location=device)
     sac.actor.load_state_dict(state)
     sac.actor.eval()
     print(f"✅ Loaded actor weights from: {chosen_path} (device: {device})")
     print(f"Env: {env_id}")
 
-    # Rollouts (deterministic policy)
+    
     returns, lengths = [], []
     for ep in range(episodes):
         obs, _ = env.reset()

@@ -8,7 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 from sac_torch import SAC
 from collections import deque
 
-# ------------------ Meters ------------------
+
 class Meter:
     def __init__(self, size=100):
         self.buf = deque(maxlen=size)
@@ -27,25 +27,25 @@ alpha_meter = Meter(100)
 q_meter   = Meter(100)
 logp_meter= Meter(100)
 
-# ------------------ Hyperparameters ------------------
+
 SEED               = 42
-ENV_ID             = "Walker2d-v5"         # <- switched to Walker2d
+ENV_ID             = "Walker2d-v5"        
 TOTAL_STEPS        = 2_000_000
 WARMUP_STEPS       = 10_000
 TRAIN_EVERY        = 10
 UPDATES_PER_STEP   = 1
-BATCH_SIZE         = 512                   # 512 is common for Walker2d; adjust as you like
+BATCH_SIZE         = 512                   
 EVAL_EVERY_STEPS   = 10_000
-REPLAY_CAPACITY    = 1_000_000             # Walker2d benefits from a bigger buffer
+REPLAY_CAPACITY    = 1_000_000             
 SAVE_EVERY         = 200_000
 SAVE_DIR           = "checkpoints_torch_walker"
-RESUME_DIR         = ""                    # optional: folder with step_*k subdirs to resume from
+RESUME_DIR         = ""                   
 
-LOG_DIR            = "runs/sac_walker2d"   # TensorBoard logdir
+LOG_DIR            = "runs/sac_walker2d"   
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# ------------------ Replay Buffer ------------------
+
 class ReplayBuffer:
     def __init__(self, state_dim, action_dim, capacity=int(1e6)):
         self.s_buf  = np.zeros((capacity, state_dim), dtype=np.float32)
@@ -76,7 +76,7 @@ class ReplayBuffer:
         d   = torch.as_tensor(self.d_buf[idxs],  dtype=torch.float32, device=device)
         return s, a, r, s2, d
 
-# ------------------ Seeding ------------------
+
 def set_seed(env, seed):
     np.random.seed(seed); random.seed(seed); torch.manual_seed(seed)
     try:
@@ -86,7 +86,7 @@ def set_seed(env, seed):
     except Exception:
         pass
 
-# ------------------ Make envs ------------------
+
 env = gym.make(ENV_ID)
 eval_env = gym.make(ENV_ID)
 set_seed(env, SEED); set_seed(eval_env, SEED+1)
@@ -96,10 +96,10 @@ action_dim = env.action_space.shape[0]
 act_low    = env.action_space.low
 act_high   = env.action_space.high
 
-# ------------------ SAC agent (PyTorch) ------------------
+
 sac = SAC(state_dim, action_dim, act_low, act_high, device=device)
 
-# ------------------ Auto-resume from latest checkpoint (optional) ------------------
+
 if RESUME_DIR and os.path.exists(RESUME_DIR):
     subdirs = [d for d in os.listdir(RESUME_DIR) if os.path.isdir(os.path.join(RESUME_DIR, d))]
     if subdirs:
@@ -128,10 +128,10 @@ if RESUME_DIR and os.path.exists(RESUME_DIR):
 else:
     print("No resume directory — starting fresh.")
 
-# ------------------ Replay buffer ------------------
+
 replay = ReplayBuffer(state_dim, action_dim, capacity=REPLAY_CAPACITY)
 
-# ------------------ TensorBoard ------------------
+
 os.makedirs(LOG_DIR, exist_ok=True)
 writer = SummaryWriter(LOG_DIR)
 writer.add_text("config", f"""
@@ -147,7 +147,7 @@ save_every: {SAVE_EVERY}
 device: {device}
 """.strip())
 
-# ------------------ Training loop ------------------
+
 obs, _ = env.reset()
 episode_ret, episode_len = 0.0, 0
 t0 = time.time()
@@ -156,7 +156,7 @@ start_time = t0
 for step in range(1, TOTAL_STEPS + 1):
     state = obs.astype(np.float32)
 
-    # Action selection
+   
     if step <= WARMUP_STEPS:
         action = env.action_space.sample().astype(np.float32)
     else:
@@ -165,7 +165,7 @@ for step in range(1, TOTAL_STEPS + 1):
             a_t = sac.actor.act(s_t, deterministic=False)[0].cpu().numpy()
         action = np.clip(a_t, act_low, act_high).astype(np.float32)
 
-    # Step env
+  
     next_obs, reward, terminated, truncated, _ = env.step(action)
     done = bool(terminated)  # bootstrap only on true terminal
     replay.add(state, action, [reward], next_obs.astype(np.float32), [float(done)])
@@ -174,25 +174,24 @@ for step in range(1, TOTAL_STEPS + 1):
     episode_ret += reward
     episode_len += 1
 
-    # Episode end
+    
     if terminated or truncated:
         ret_meter.add(episode_ret)
         len_meter.add(episode_len)
 
-        # TensorBoard: episode scalars
+        
         writer.add_scalar("episode/return", episode_ret, global_step=step)
         writer.add_scalar("episode/length", episode_len, global_step=step)
 
         obs, _ = env.reset()
         episode_ret, episode_len = 0.0, 0
 
-    # Train
     if step > WARMUP_STEPS and (step % TRAIN_EVERY == 0) and replay.size >= BATCH_SIZE:
         for _ in range(UPDATES_PER_STEP):
             batch = replay.sample_torch(BATCH_SIZE, device)
             logs = sac.train_on_batch(batch)
 
-            # meters
+            
             lq_meter.add(logs["loss_q"])
             lpi_meter.add(logs["loss_pi"])
             la_meter.add(logs["loss_alpha"])
@@ -200,7 +199,7 @@ for step in range(1, TOTAL_STEPS + 1):
             q_meter.add(logs["minq_mean"])
             logp_meter.add(logs["logp_mean"])
 
-            # TensorBoard: per-update scalars
+            
             writer.add_scalar("loss/critic",  logs["loss_q"],   global_step=step)
             writer.add_scalar("loss/actor",   logs["loss_pi"],  global_step=step)
             writer.add_scalar("loss/alpha",   logs["loss_alpha"], global_step=step)
@@ -208,7 +207,7 @@ for step in range(1, TOTAL_STEPS + 1):
             writer.add_scalar("diagnostics/minQ_mean", logs["minq_mean"],global_step=step)
             writer.add_scalar("diagnostics/logp_mean", logs["logp_mean"],global_step=step)
 
-        # console print every 1k steps
+       
         if step % 1000 == 0:
             elapsed = time.time() - t0
             print(f"[step {step:7d}] "
@@ -218,7 +217,7 @@ for step in range(1, TOTAL_STEPS + 1):
                   f"minQ{q_meter.avg:9.3f}  logp{logp_meter.avg:8.3f}  "
                   f"time {elapsed/60:.1f}m")
 
-    # Periodic checkpoint
+    
     if step % SAVE_EVERY == 0:
         ckpt_path = os.path.join(SAVE_DIR, f"step_{step//1000}k")
         os.makedirs(ckpt_path, exist_ok=True)
@@ -230,7 +229,7 @@ for step in range(1, TOTAL_STEPS + 1):
         torch.save({"log_alpha": sac.log_alpha.detach().cpu()}, os.path.join(ckpt_path, "alpha.pt"))
         print(f"💾 Saved checkpoint: {ckpt_path}")
 
-    # Periodic eval
+    
     if step % EVAL_EVERY_STEPS == 0:
         eval_returns = []
         for _ in range(3):
@@ -252,11 +251,11 @@ for step in range(1, TOTAL_STEPS + 1):
         print(f" [avg episode returns {avg_ret:>7.1f}] || [step {step:>7}]  replay {replay.size:>7} | "
               f"alpha {alpha_val:.3f} | time {elapsed/60:.1f}m")
 
-        # TensorBoard: eval
+        
         writer.add_scalar("eval/avg_return", avg_ret, global_step=step)
         writer.add_scalar("replay/size", replay.size, global_step=step)
 
-# Final save
+
 os.makedirs(SAVE_DIR, exist_ok=True)
 torch.save(sac.actor.state_dict(),  os.path.join(SAVE_DIR, "actor_final.pt"))
 torch.save(sac.q1.state_dict(),     os.path.join(SAVE_DIR, "q1_final.pt"))

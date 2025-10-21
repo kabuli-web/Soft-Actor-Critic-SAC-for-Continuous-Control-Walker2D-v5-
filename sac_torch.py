@@ -19,11 +19,7 @@ def mlp(sizes, activation=nn.ReLU, output_activation=None):
     return nn.Sequential(*layers)
 
 class Actor(nn.Module):
-    """
-    Tanh-Gaussian policy with action scaling.
-    Outputs [mu, log_std] then samples: u = mu + std * eps; a = tanh(u)
-    Returns scaled action in env bounds and tanh-corrected log-prob.
-    """
+  
     def __init__(self, state_dim, action_dim, action_low, action_high,
                  hidden_sizes=(256, 256), log_std_min=-20.0, log_std_max=2.0, device="cpu"):
         super().__init__()
@@ -50,7 +46,7 @@ class Actor(nn.Module):
 
     @staticmethod
     def _gaussian_log_prob(u, mu, log_std):
-        # sum over action dims -> shape [B,1]
+        
         # log N(u; mu, std) = -0.5 * [ ((u-mu)/std)^2 + 2*log_std + log(2π) ]
         pre_sum = -0.5 * (((u - mu) * torch.exp(-log_std))**2 + 2.0*log_std + LOG_2PI)
         return pre_sum.sum(dim=-1, keepdim=True)
@@ -62,9 +58,7 @@ class Actor(nn.Module):
         return torch.log(1.0 - a.pow(2) + 1e-6).sum(dim=-1, keepdim=True)
 
     def sample(self, state: Tensor):
-        """
-        Returns: action (scaled) [B, A], logp [B,1]
-        """
+        
         mu, log_std = self._forward_mu_logstd(state)
         std = torch.exp(log_std)
         eps = torch.randn_like(std)
@@ -80,9 +74,7 @@ class Actor(nn.Module):
 
     @torch.no_grad()
     def act(self, state: Tensor, deterministic=True):
-        """
-        Deterministic/Stochastic action for interaction; returns scaled action [B,A].
-        """
+       
         mu, log_std = self._forward_mu_logstd(state)
         if deterministic:
             a_tanh = torch.tanh(mu)
@@ -94,7 +86,7 @@ class Actor(nn.Module):
 
 
 class Critic(nn.Module):
-    """Q(s,a) -> scalar."""
+    
     def __init__(self, state_dim, action_dim, hidden=(256, 256)):
         super().__init__()
         self.q = mlp([state_dim + action_dim, hidden[0], hidden[1], 1])
@@ -111,10 +103,7 @@ def soft_update(target: nn.Module, source: nn.Module, tau: float):
 
 
 class SAC(nn.Module):
-    """
-    Wraps Actor + twin Critics + target Critics.
-    Provides train_on_batch for a single SAC update step.
-    """
+    
     def __init__(self, state_dim, action_dim, action_low, action_high, device="cpu"):
         super().__init__()
         self.device = torch.device(device)
@@ -147,10 +136,7 @@ class SAC(nn.Module):
 
         
     def critics_train_step(self, s, a, r, s2, d):
-        """
-        s,a,r,s2,d shapes: [B,S], [B,A], [B,1], [B,S], [B,1]
-        Updates q1,q2 using targets from q1_tgt/q2_tgt and current policy.
-        """
+        
         with torch.no_grad():
             a2, logp2 = self.actor.sample(s2)
             q1_tp1 = self.q1_tgt(s2, a2)
@@ -173,9 +159,7 @@ class SAC(nn.Module):
         return loss_q.item(), q1_pred.mean().item(), q2_pred.mean().item()
 
     def actor_train_step(self, s):
-        """
-        Updates only the actor (policy) using min(Q1,Q2) and alpha*logpi.
-        """
+        
         alpha = self.log_alpha.exp()
         a_pi, logp_pi = self.actor.sample(s)
         q1_pi = self.q1(s, a_pi)
@@ -191,10 +175,7 @@ class SAC(nn.Module):
         return loss_pi.item(), logp_pi.mean().item(), min_q.mean().item()
 
     def alpha_train_step(self, s):
-        """
-        Auto-tune temperature to match target entropy.
-        Only updates log_alpha.
-        """
+        
         with torch.no_grad():
             _, logp = self.actor.sample(s)
         loss_alpha = -(self.log_alpha * (logp + self.target_entropy)).mean()
@@ -210,10 +191,7 @@ class SAC(nn.Module):
         soft_update(self.q2_tgt, self.q2, self.tau)
 
     def train_on_batch(self, batch):
-        """
-        batch: tuple of tensors (s, a, r, s2, d) already on device (float32)
-        Returns dict of logs like the TF version.
-        """
+        
         s, a, r, s2, d = [t.to(self.device) for t in batch]
 
         loss_q, q1m, q2m = self.critics_train_step(s, a, r, s2, d)
