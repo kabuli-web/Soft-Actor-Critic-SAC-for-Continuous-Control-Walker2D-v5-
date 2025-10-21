@@ -89,6 +89,7 @@ Parameter	Value
 | Update every x steps   | 10           |
 
 Results
+
 <img width="916" height="421" alt="image" src="https://github.com/user-attachments/assets/5773fd7b-7531-40bc-8a12-608084c529cf" />
 
 
